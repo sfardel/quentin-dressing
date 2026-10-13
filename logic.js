@@ -4,8 +4,9 @@ export function isConfigured(cfg) {
   return Boolean(cfg && cfg.apiKey && cfg.projectId);
 }
 
+// Unités UTF-16, comme size() des règles Firestore et maxlength : un emoji compte pour 2.
 export function textLength(s) {
-  return Array.from(s).length;
+  return s.length;
 }
 
 export function validateEntry({ zone, item, name }, { zoneIds, friends, maxLen = 60 }) {

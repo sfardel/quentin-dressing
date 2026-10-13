@@ -37,10 +37,11 @@ test("isConfigured exige apiKey et projectId", () => {
   assert.equal(isConfigured(undefined), false);
 });
 
-test("textLength compte les emojis comme un caractère", () => {
+// Même comptage que size() des règles Firestore (vérifié en réel) et que maxlength : unités UTF-16.
+test("textLength compte comme Firestore : un emoji vaut 2, un « é » vaut 1", () => {
   assert.equal(textLength("abc"), 3);
-  assert.equal(textLength("🎩"), 1);
-  assert.equal(textLength("🎩🎩"), 2);
+  assert.equal(textLength("é"), 1);
+  assert.equal(textLength("🎩"), 2);
 });
 
 test("validateEntry nettoie les espaces et accepte une entrée valide", () => {
@@ -65,13 +66,15 @@ test("validateEntry refuse une zone inconnue", () => {
   assert.equal(validateEntry({ zone: "nez", item: "x", name: "Henri" }, OPTS).ok, false);
 });
 
-test("validateEntry limite à 60 caractères en comptant les emojis comme un seul", () => {
+test("validateEntry limite à 60 caractères comptés comme Firestore", () => {
   assert.equal(validateEntry({ zone: "tete", item: "a".repeat(60), name: "Henri" }, OPTS).ok, true);
   assert.deepEqual(validateEntry({ zone: "tete", item: "a".repeat(61), name: "Henri" }, OPTS), {
     ok: false,
     error: "Description trop longue (60 caractères max).",
   });
-  assert.equal(validateEntry({ zone: "tete", item: "🎩".repeat(60), name: "Henri" }, OPTS).ok, true);
+  assert.equal(validateEntry({ zone: "tete", item: "é".repeat(60), name: "Henri" }, OPTS).ok, true);
+  assert.equal(validateEntry({ zone: "tete", item: "🎩".repeat(30), name: "Henri" }, OPTS).ok, true);
+  assert.equal(validateEntry({ zone: "tete", item: "🎩".repeat(31), name: "Henri" }, OPTS).ok, false);
 });
 
 test("groupByZone crée toutes les zones, garde l'ordre et ignore les zones inconnues", () => {
