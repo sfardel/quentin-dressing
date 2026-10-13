@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Une page web statique « Déguisons Quentin ! » où des amis cliquent sur une zone d'une silhouette et indiquent l'accessoire qu'ils ramènent, avec une liste partagée en temps réel via Firestore.
+**Goal:** Une page web statique « Déguisons Quentin ! » où chaque ami choisit son prénom, clique sur une zone d'une silhouette et indique l'accessoire qu'il ramène, avec une liste partagée en temps réel via Firestore.
 
-**Architecture:** HTML/CSS/JS vanilla en ES modules, sans build. La logique pure (validation, regroupement, identité locale) est dans `logic.js` et testée avec `node --test`. L'accès aux données passe par une interface « store » (`subscribe` / `addItem` / `deleteItem`) qui a deux implémentations : Firestore (`store.js`) et une démo locale (`demo-store.js`, activée par `?demo`). La démo sert à vérifier l'interface sans projet Firebase. `app.js` gère le rendu et les événements.
+**Architecture:** HTML/CSS/JS vanilla en ES modules, sans build. La logique pure (validation, regroupement, prénom mémorisé) est dans `logic.js` et testée avec `node --test`. L'accès aux données passe par une interface « store » (`subscribe` / `addItem` / `deleteItem`) qui a deux implémentations : Firestore (`store.js`) et une démo locale (`demo-store.js`, activée par `?demo`). La démo sert à vérifier l'interface sans projet Firebase. `app.js` gère le rendu et les événements.
 
 **Tech Stack:** HTML5, CSS, JavaScript ES modules, Firebase JS SDK 10.14.1 (modulaire, CDN `gstatic`), Node 22 (`node --test`) pour les tests unitaires, `http-server@14.1.1` (via `npx`) pour servir en local, Chrome DevTools MCP pour les vérifications navigateur.
 
@@ -15,20 +15,21 @@
 ## Global Constraints
 
 - Prénom du marié : `Quentin` ; titre : « Déguisons Quentin ! 🎉 ».
+- Amis (ordre alphabétique) : `Adrien`, `Antoine`, `Cletch`, `Constantin`, `Eli`, `Fel`, `Gui`, `Henri`, `Jo`, `Nico`, `Pierre`, `Simon`, `Sofiane`, `Thieum`, `Val`. La même liste figure dans `config.js` et dans `firestore.rules`.
 - 10 zones, dans cet ordre : `tete`, `visage`, `cou`, `torse`, `bras`, `mains`, `taille`, `jambes`, `pieds`, `autre`.
-- `item` et `name` : 1 à 60 caractères après suppression des espaces en début et fin.
-- Collection Firestore unique `items` ; document `{ zone, item, name, ownerId, createdAt }` ; `createdAt` = `serverTimestamp()`.
+- `item` : 1 à 60 caractères après suppression des espaces en début et fin. `name` : un prénom de la liste.
+- Collection Firestore unique `items` ; document `{ zone, item, name, createdAt }` ; `createdAt` = `serverTimestamp()`.
 - Aucun texte venant de la base n'est inséré via `innerHTML` : uniquement via `textContent`.
 - Tout accès à `localStorage` est protégé (try/catch) ; l'app fonctionne sans.
-- Le bouton « Supprimer » n'apparaît que sur les entrées dont `ownerId` est égal à celui du navigateur.
+- Le bouton « Supprimer » n'apparaît que sur les entrées dont `name` est égal au prénom choisi.
 - Aucune dépendance npm à l'exécution ; aucune étape de build.
 - Mobile-first : la page doit fonctionner à 390 px de large sans scroll horizontal.
 
 ## Review Focus
 
-1. Champs remplis uniquement d'espaces → refusés avec un message, rien n'est écrit (test dans Task 1).
+1. Accessoire fait uniquement d'espaces → refusé avec un message, rien n'est écrit (test dans Task 1).
 2. Accessoire contenant des emojis → la limite de 60 compte les caractères visibles (points de code), pas les unités UTF-16, pour rester cohérente avec `size()` des règles Firestore (test dans Task 1 ; vérification live dans Task 5).
-3. `localStorage` indisponible ou qui lève une exception (navigation privée, cookies bloqués) → l'app se charge et l'ajout fonctionne (test dans Task 1).
+3. `localStorage` indisponible ou qui lève une exception (navigation privée, cookies bloqués), ou prénom mémorisé retiré depuis de la liste → la fenêtre de choix s'affiche et l'ajout fonctionne (tests dans Task 1).
 4. Document avec une zone inconnue dans la base (donnée corrompue ou ancienne) → ignoré, pas de plantage (test dans Task 1).
 5. Double tap rapide sur « Ajouter » → une seule entrée créée (vérification navigateur dans Task 4).
 
@@ -39,11 +40,11 @@
 | Fichier | Responsabilité |
 |---|---|
 | `package.json` | `"type": "module"` et script `test`. |
-| `config.js` | Prénom, zones (id, label, position du badge), longueur max, `firebaseConfig`. |
-| `logic.js` | Fonctions pures : `isConfigured`, `textLength`, `validateEntry`, `groupByZone`, `loadIdentity`, `saveName`. |
+| `config.js` | Prénom du marié, amis, zones (id, label, position du badge), longueur max, `firebaseConfig`. |
+| `logic.js` | Fonctions pures : `isConfigured`, `textLength`, `validateEntry`, `groupByZone`, `loadName`, `saveName`. |
 | `demo-store.js` | Store local (localStorage + BroadcastChannel) pour `?demo`. |
 | `store.js` | Store Firestore. |
-| `index.html` | Structure, silhouette SVG, panneau, récapitulatif. |
+| `index.html` | Structure, fenêtre de choix du prénom, silhouette SVG, panneau, récapitulatif. |
 | `style.css` | Styles. |
 | `app.js` | Rendu et interactions. |
 | `firestore.rules` | Règles de sécurité. |
@@ -63,13 +64,13 @@
 **Interfaces:**
 - Consumes: rien.
 - Produces:
-  - `config.js` : `GROOM_NAME: string`, `ZONES: Array<{ id: string, label: string, badge: { x: number, y: number } | null }>`, `MAX_LEN: number` (60), `firebaseConfig: object`.
+  - `config.js` : `GROOM_NAME: string`, `FRIENDS: string[]`, `ZONES: Array<{ id: string, label: string, badge: { x: number, y: number } | null }>`, `MAX_LEN: number` (60), `firebaseConfig: object`.
   - `logic.js` :
     - `isConfigured(cfg: object) → boolean`
     - `textLength(s: string) → number` (nombre de points de code)
-    - `validateEntry({ zone, item, name }, zoneIds: string[], maxLen = 60) → { ok: true, value: { zone, item, name } } | { ok: false, error: string }`
+    - `validateEntry({ zone, item, name }, { zoneIds: string[], friends: string[], maxLen = 60 }) → { ok: true, value: { zone, item, name } } | { ok: false, error: string }`
     - `groupByZone(items: Array<{ zone: string }>, zoneIds: string[]) → Record<zoneId, item[]>` (toutes les zones présentes, ordre d'entrée conservé, zones inconnues ignorées)
-    - `loadIdentity(storage: Storage | null, makeId: () => string) → { ownerId: string, name: string }`
+    - `loadName(storage: Storage | null, friends: string[]) → string | null` (prénom mémorisé s'il est dans la liste, sinon `null`)
     - `saveName(storage: Storage | null, name: string) → void`
 
 - [ ] **Step 1: Créer `package.json`**
@@ -89,6 +90,25 @@
 
 ```js
 export const GROOM_NAME = "Quentin";
+
+// Si tu modifies cette liste, recopie-la aussi dans firestore.rules.
+export const FRIENDS = [
+  "Adrien",
+  "Antoine",
+  "Cletch",
+  "Constantin",
+  "Eli",
+  "Fel",
+  "Gui",
+  "Henri",
+  "Jo",
+  "Nico",
+  "Pierre",
+  "Simon",
+  "Sofiane",
+  "Thieum",
+  "Val",
+];
 
 export const MAX_LEN = 60;
 
@@ -127,18 +147,19 @@ import {
   textLength,
   validateEntry,
   groupByZone,
-  loadIdentity,
+  loadName,
   saveName,
 } from "../logic.js";
 
 const ZONE_IDS = ["tete", "pieds", "autre"];
+const FRIENDS = ["Henri", "Simon"];
+const OPTS = { zoneIds: ZONE_IDS, friends: FRIENDS };
 
-function fakeStorage(initial = {}) {
-  const data = new Map(Object.entries(initial));
+function fakeStorage() {
+  const data = new Map();
   return {
     getItem: (k) => (data.has(k) ? data.get(k) : null),
     setItem: (k, v) => data.set(k, String(v)),
-    data,
   };
 }
 
@@ -165,36 +186,34 @@ test("textLength compte les emojis comme un caractère", () => {
 });
 
 test("validateEntry nettoie les espaces et accepte une entrée valide", () => {
-  const r = validateEntry({ zone: "tete", item: "  perruque  ", name: " Marc " }, ZONE_IDS);
-  assert.deepEqual(r, { ok: true, value: { zone: "tete", item: "perruque", name: "Marc" } });
+  const r = validateEntry({ zone: "tete", item: "  perruque  ", name: "Henri" }, OPTS);
+  assert.deepEqual(r, { ok: true, value: { zone: "tete", item: "perruque", name: "Henri" } });
 });
 
-test("validateEntry refuse les champs vides ou faits d'espaces", () => {
-  assert.equal(validateEntry({ zone: "tete", item: "x", name: "   " }, ZONE_IDS).ok, false);
-  assert.equal(validateEntry({ zone: "tete", item: "   ", name: "Marc" }, ZONE_IDS).ok, false);
-  assert.equal(validateEntry({ zone: "tete", item: undefined, name: "Marc" }, ZONE_IDS).ok, false);
+test("validateEntry refuse un accessoire vide ou fait d'espaces", () => {
+  const expected = { ok: false, error: "Indique ce que tu ramènes." };
+  assert.deepEqual(validateEntry({ zone: "tete", item: "   ", name: "Henri" }, OPTS), expected);
+  assert.deepEqual(validateEntry({ zone: "tete", item: "", name: "Henri" }, OPTS), expected);
+  assert.deepEqual(validateEntry({ zone: "tete", item: undefined, name: "Henri" }, OPTS), expected);
 });
 
-test("validateEntry renvoie un message en français", () => {
-  assert.deepEqual(validateEntry({ zone: "tete", item: "x", name: "" }, ZONE_IDS), {
-    ok: false,
-    error: "Indique ton prénom.",
-  });
-  assert.deepEqual(validateEntry({ zone: "tete", item: "", name: "Marc" }, ZONE_IDS), {
-    ok: false,
-    error: "Indique ce que tu ramènes.",
-  });
+test("validateEntry refuse un prénom absent ou hors liste", () => {
+  const expected = { ok: false, error: "Choisis ton prénom." };
+  assert.deepEqual(validateEntry({ zone: "tete", item: "x", name: null }, OPTS), expected);
+  assert.deepEqual(validateEntry({ zone: "tete", item: "x", name: "Marc" }, OPTS), expected);
 });
 
 test("validateEntry refuse une zone inconnue", () => {
-  assert.equal(validateEntry({ zone: "nez", item: "x", name: "Marc" }, ZONE_IDS).ok, false);
+  assert.equal(validateEntry({ zone: "nez", item: "x", name: "Henri" }, OPTS).ok, false);
 });
 
 test("validateEntry limite à 60 caractères en comptant les emojis comme un seul", () => {
-  assert.equal(validateEntry({ zone: "tete", item: "a".repeat(60), name: "M" }, ZONE_IDS).ok, true);
-  assert.equal(validateEntry({ zone: "tete", item: "a".repeat(61), name: "M" }, ZONE_IDS).ok, false);
-  assert.equal(validateEntry({ zone: "tete", item: "🎩".repeat(60), name: "M" }, ZONE_IDS).ok, true);
-  assert.equal(validateEntry({ zone: "tete", item: "x", name: "b".repeat(61) }, ZONE_IDS).ok, false);
+  assert.equal(validateEntry({ zone: "tete", item: "a".repeat(60), name: "Henri" }, OPTS).ok, true);
+  assert.deepEqual(validateEntry({ zone: "tete", item: "a".repeat(61), name: "Henri" }, OPTS), {
+    ok: false,
+    error: "Description trop longue (60 caractères max).",
+  });
+  assert.equal(validateEntry({ zone: "tete", item: "🎩".repeat(60), name: "Henri" }, OPTS).ok, true);
 });
 
 test("groupByZone crée toutes les zones, garde l'ordre et ignore les zones inconnues", () => {
@@ -214,27 +233,30 @@ test("groupByZone crée toutes les zones, garde l'ordre et ignore les zones inco
 test("groupByZone ignore une zone nommée comme une propriété d'Object", () => {
   const g = groupByZone([{ id: "1", zone: "toString" }, { id: "2", zone: "__proto__" }], ZONE_IDS);
   assert.deepEqual(Object.keys(g), ZONE_IDS);
+  assert.deepEqual(Object.values(g).flat(), []);
 });
 
-test("loadIdentity crée puis réutilise l'ownerId", () => {
+test("saveName puis loadName renvoie le prénom", () => {
   const storage = fakeStorage();
-  const first = loadIdentity(storage, () => "id-1");
-  assert.deepEqual(first, { ownerId: "id-1", name: "" });
-  const second = loadIdentity(storage, () => "id-2");
-  assert.equal(second.ownerId, "id-1");
+  assert.equal(loadName(storage, FRIENDS), null);
+  saveName(storage, "Simon");
+  assert.equal(loadName(storage, FRIENDS), "Simon");
 });
 
-test("saveName est relu par loadIdentity", () => {
+test("loadName ignore un prénom qui n'est plus dans la liste", () => {
   const storage = fakeStorage();
   saveName(storage, "Marc");
-  assert.equal(loadIdentity(storage, () => "id").name, "Marc");
+  assert.equal(loadName(storage, FRIENDS), null);
 });
 
-test("loadIdentity et saveName fonctionnent sans stockage ou avec un stockage qui lève", () => {
-  assert.deepEqual(loadIdentity(null, () => "id-x"), { ownerId: "id-x", name: "" });
-  assert.deepEqual(loadIdentity(throwingStorage, () => "id-y"), { ownerId: "id-y", name: "" });
-  assert.doesNotThrow(() => saveName(null, "Marc"));
-  assert.doesNotThrow(() => saveName(throwingStorage, "Marc"));
+test("loadName renvoie null sans stockage ou avec un stockage qui lève", () => {
+  assert.equal(loadName(null, FRIENDS), null);
+  assert.equal(loadName(throwingStorage, FRIENDS), null);
+});
+
+test("saveName ne lève pas sans stockage ou avec un stockage qui lève", () => {
+  assert.doesNotThrow(() => saveName(null, "Simon"));
+  assert.doesNotThrow(() => saveName(throwingStorage, "Simon"));
 });
 ```
 
@@ -246,7 +268,6 @@ Expected: FAIL — `Cannot find module '.../logic.js'`.
 - [ ] **Step 5: Implémenter `logic.js`**
 
 ```js
-const OWNER_KEY = "evg-owner-id";
 const NAME_KEY = "evg-name";
 
 export function isConfigured(cfg) {
@@ -257,19 +278,15 @@ export function textLength(s) {
   return Array.from(s).length;
 }
 
-export function validateEntry({ zone, item, name }, zoneIds, maxLen = 60) {
+export function validateEntry({ zone, item, name }, { zoneIds, friends, maxLen = 60 }) {
   if (!zoneIds.includes(zone)) return { ok: false, error: "Zone inconnue." };
-  const cleanName = String(name ?? "").trim();
+  if (!friends.includes(name)) return { ok: false, error: "Choisis ton prénom." };
   const cleanItem = String(item ?? "").trim();
-  if (!cleanName) return { ok: false, error: "Indique ton prénom." };
   if (!cleanItem) return { ok: false, error: "Indique ce que tu ramènes." };
-  if (textLength(cleanName) > maxLen) {
-    return { ok: false, error: `Prénom trop long (${maxLen} caractères max).` };
-  }
   if (textLength(cleanItem) > maxLen) {
     return { ok: false, error: `Description trop longue (${maxLen} caractères max).` };
   }
-  return { ok: true, value: { zone, item: cleanItem, name: cleanName } };
+  return { ok: true, value: { zone, item: cleanItem, name } };
 }
 
 export function groupByZone(items, zoneIds) {
@@ -280,30 +297,19 @@ export function groupByZone(items, zoneIds) {
   return groups;
 }
 
-export function loadIdentity(storage, makeId) {
-  let ownerId = safeGet(storage, OWNER_KEY);
-  if (!ownerId) {
-    ownerId = makeId();
-    safeSet(storage, OWNER_KEY, ownerId);
+export function loadName(storage, friends) {
+  let name = null;
+  try {
+    name = storage ? storage.getItem(NAME_KEY) : null;
+  } catch {
+    // Stockage indisponible : il faudra choisir son prénom.
   }
-  return { ownerId, name: safeGet(storage, NAME_KEY) ?? "" };
+  return friends.includes(name) ? name : null;
 }
 
 export function saveName(storage, name) {
-  safeSet(storage, NAME_KEY, name);
-}
-
-function safeGet(storage, key) {
   try {
-    return storage ? storage.getItem(key) : null;
-  } catch {
-    return null;
-  }
-}
-
-function safeSet(storage, key, value) {
-  try {
-    storage?.setItem(key, value);
+    storage?.setItem(NAME_KEY, name);
   } catch {
     // Stockage indisponible : on continue sans mémoriser.
   }
@@ -313,13 +319,13 @@ function safeSet(storage, key, value) {
 - [ ] **Step 6: Lancer les tests et vérifier qu'ils passent**
 
 Run: `npm test`
-Expected: PASS — 12 tests, 0 échec.
+Expected: PASS — 13 tests, 0 échec.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add package.json config.js logic.js tests/logic.test.js
-git commit -m "feat: config et logique pure (validation, regroupement, identité)"
+git commit -m "feat: config et logique pure (validation, regroupement, prénom)"
 ```
 
 ---
@@ -335,9 +341,9 @@ git commit -m "feat: config et logique pure (validation, regroupement, identité
 - Consumes: rien (les entrées reçues sont déjà validées par `validateEntry`).
 - Produces (interface « store », identique pour les deux implémentations) :
   - `subscribe(onChange: (items: Item[]) => void, onError?: (err) => void) → unsubscribe: () => void`
-  - `addItem({ zone, item, name, ownerId }) → Promise<void>`
+  - `addItem({ zone, item, name }) → Promise<void>`
   - `deleteItem(id: string) → Promise<void>`
-  - `Item = { id: string, zone: string, item: string, name: string, ownerId: string }`
+  - `Item = { id: string, zone: string, item: string, name: string }`
   - `createDemoStore({ storage: Storage | null, channel: BroadcastChannel-like | null })` dans `demo-store.js`
   - `createFirebaseStore(firebaseConfig)` dans `store.js`
 
@@ -377,7 +383,7 @@ function fakeBus() {
   };
 }
 
-const entry = { zone: "tete", item: "perruque", name: "Marc", ownerId: "o1" };
+const entry = { zone: "tete", item: "perruque", name: "Henri" };
 
 test("subscribe reçoit d'abord une liste vide", () => {
   const store = createDemoStore({ storage: fakeStorage(), channel: null });
@@ -392,9 +398,10 @@ test("addItem notifie avec un id, et deleteItem retire l'entrée", async () => {
   store.subscribe((items) => (latest = items));
   await store.addItem(entry);
   assert.equal(latest.length, 1);
-  assert.equal(typeof latest[0].id, "string");
-  assert.deepEqual({ ...latest[0], id: undefined }, { ...entry, id: undefined });
-  await store.deleteItem(latest[0].id);
+  const { id, ...rest } = latest[0];
+  assert.equal(typeof id, "string");
+  assert.deepEqual(rest, entry);
+  await store.deleteItem(id);
   assert.deepEqual(latest, []);
 });
 
@@ -489,7 +496,7 @@ export function createDemoStore({ storage, channel }) {
 - [ ] **Step 4: Lancer les tests et vérifier qu'ils passent**
 
 Run: `npm test`
-Expected: PASS — 17 tests, 0 échec.
+Expected: PASS — 18 tests, 0 échec.
 
 - [ ] **Step 5: Implémenter `store.js` (Firestore)**
 
@@ -521,8 +528,8 @@ export function createFirebaseStore(firebaseConfig) {
         onError,
       );
     },
-    async addItem({ zone, item, name, ownerId }) {
-      await addDoc(items, { zone, item, name, ownerId, createdAt: serverTimestamp() });
+    async addItem({ zone, item, name }) {
+      await addDoc(items, { zone, item, name, createdAt: serverTimestamp() });
     },
     async deleteItem(id) {
       await deleteDoc(doc(items, id));
@@ -548,7 +555,7 @@ git commit -m "feat: stores démo (local) et Firestore"
 
 **Interfaces:**
 - Consumes: les ids de zone de `config.js` (via les attributs `data-zone`).
-- Produces (identifiants DOM utilisés par `app.js`) : `#title`, `#banner`, `#body` (svg), `#badges` (g), `[data-zone]` (10 éléments, dont `#zone-autre`), `#other-count`, `#recap-list`, `#sheet`, `#sheet-title`, `#sheet-list`, `#add-form`, `#name-input`, `#item-input`, `#submit-btn`, `[data-close]`, `#toast`. Classes CSS : `.filled` (zone avec accessoires), `.badge`, `.empty`, `.delete`, `.show` (toast visible).
+- Produces (identifiants DOM utilisés par `app.js`) : `#title`, `#whoami`, `#current-name`, `#change-name`, `#banner`, `#body` (svg), `#badges` (g), `[data-zone]` (10 éléments, dont `#zone-autre`), `#other-count`, `#recap-list`, `#picker`, `#picker-list`, `#picker-close`, `#sheet`, `#sheet-title`, `#sheet-list`, `#add-form`, `#item-input`, `#submit-btn`, `[data-close]` (fermeture du panneau), `#toast`. Classes CSS : `.filled` (zone avec accessoires), `.badge`, `.empty`, `.delete`, `.show` (toast visible) ; attribut `aria-pressed="true"` sur le prénom courant dans `#picker-list`.
 
 - [ ] **Step 1: Créer `index.html`**
 
@@ -566,6 +573,10 @@ git commit -m "feat: stores démo (local) et Firestore"
     <header>
       <h1 id="title">Déguisons Quentin ! 🎉</h1>
       <p class="intro">Touche une partie du corps pour dire ce que tu ramènes.</p>
+      <p id="whoami" class="whoami" hidden>
+        Salut <strong id="current-name"></strong> ·
+        <button type="button" id="change-name" class="link">ce n'est pas moi</button>
+      </p>
     </header>
 
     <div id="banner" class="banner" hidden></div>
@@ -618,6 +629,16 @@ git commit -m "feat: stores démo (local) et Firestore"
       </section>
     </main>
 
+    <div id="picker" class="picker" hidden>
+      <div class="picker-panel" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+        <div class="sheet-head">
+          <h2 id="picker-title">Qui es-tu ?</h2>
+          <button type="button" id="picker-close" class="close" aria-label="Fermer" hidden>✕</button>
+        </div>
+        <div id="picker-list" class="picker-list"></div>
+      </div>
+    </div>
+
     <div id="sheet" class="sheet" hidden>
       <div class="sheet-backdrop" data-close></div>
       <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
@@ -627,10 +648,6 @@ git commit -m "feat: stores démo (local) et Firestore"
         </div>
         <ul id="sheet-list" class="entries"></ul>
         <form id="add-form" class="add-form" novalidate>
-          <label>
-            Ton prénom
-            <input id="name-input" name="name" maxlength="60" autocomplete="given-name" />
-          </label>
           <label>
             Ce que tu ramènes
             <input id="item-input" name="item" maxlength="60" placeholder="Ex. perruque fluo" autocomplete="off" />
@@ -688,6 +705,21 @@ h1 {
 .intro {
   margin: 6px 0 0;
   color: var(--muted);
+}
+
+.whoami {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--filled-stroke);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .banner {
@@ -826,6 +858,56 @@ svg .zone:focus-visible :is(path, rect, circle) {
   cursor: pointer;
 }
 
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(43, 33, 24, 0.6);
+}
+
+.picker[hidden] {
+  display: none;
+}
+
+.picker-panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.picker-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.picker-list button {
+  padding: 12px 4px;
+  border: 1.5px solid var(--zone-stroke);
+  border-radius: 10px;
+  background: var(--zone);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.picker-list button[aria-pressed="true"] {
+  background: var(--filled);
+  border-color: var(--filled-stroke);
+  color: #fff;
+}
+
 .sheet {
   position: fixed;
   inset: 0;
@@ -919,7 +1001,7 @@ svg .zone:focus-visible :is(path, rect, circle) {
   position: fixed;
   left: 50%;
   bottom: 24px;
-  z-index: 20;
+  z-index: 40;
   max-width: calc(100% - 32px);
   padding: 10px 16px;
   border-radius: 999px;
@@ -959,8 +1041,8 @@ git commit -m "feat: page statique et silhouette SVG"
 
 **Interfaces:**
 - Consumes :
-  - `config.js` : `GROOM_NAME`, `ZONES`, `MAX_LEN`, `firebaseConfig`
-  - `logic.js` : `isConfigured`, `validateEntry`, `groupByZone`, `loadIdentity`, `saveName`
+  - `config.js` : `GROOM_NAME`, `FRIENDS`, `ZONES`, `MAX_LEN`, `firebaseConfig`
+  - `logic.js` : `isConfigured`, `validateEntry`, `groupByZone`, `loadName`, `saveName`
   - `demo-store.js` : `createDemoStore({ storage, channel })` (import dynamique)
   - `store.js` : `createFirebaseStore(firebaseConfig)` (import dynamique)
   - Les identifiants DOM de Task 3.
@@ -969,8 +1051,8 @@ git commit -m "feat: page statique et silhouette SVG"
 - [ ] **Step 1: Implémenter `app.js`**
 
 ```js
-import { GROOM_NAME, ZONES, MAX_LEN, firebaseConfig } from "./config.js";
-import { isConfigured, validateEntry, groupByZone, loadIdentity, saveName } from "./logic.js";
+import { GROOM_NAME, FRIENDS, ZONES, MAX_LEN, firebaseConfig } from "./config.js";
+import { isConfigured, validateEntry, groupByZone, loadName, saveName } from "./logic.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const zoneIds = ZONES.map((z) => z.id);
@@ -979,23 +1061,28 @@ const zoneById = Object.fromEntries(ZONES.map((z) => [z.id, z]));
 const $ = (id) => document.getElementById(id);
 const els = {
   title: $("title"),
+  whoami: $("whoami"),
+  currentName: $("current-name"),
+  changeName: $("change-name"),
   banner: $("banner"),
   badges: $("badges"),
   otherCount: $("other-count"),
   recapList: $("recap-list"),
+  picker: $("picker"),
+  pickerList: $("picker-list"),
+  pickerClose: $("picker-close"),
   sheet: $("sheet"),
   sheetTitle: $("sheet-title"),
   sheetList: $("sheet-list"),
   form: $("add-form"),
-  nameInput: $("name-input"),
   itemInput: $("item-input"),
   submitBtn: $("submit-btn"),
   toast: $("toast"),
 };
 
 const storage = safeLocalStorage();
-const identity = loadIdentity(storage, () => crypto.randomUUID());
 
+let currentName = loadName(storage, FRIENDS);
 let store = null;
 let grouped = groupByZone([], zoneIds);
 let openZone = null;
@@ -1017,9 +1104,15 @@ function zoneElement(zoneId) {
 // --- Rendu ---
 
 function render() {
+  renderWhoami();
   renderZones();
   renderSheet();
   renderRecap();
+}
+
+function renderWhoami() {
+  els.whoami.hidden = !currentName;
+  els.currentName.textContent = currentName ?? "";
 }
 
 function renderZones() {
@@ -1056,7 +1149,7 @@ function entryRow(entry, { withDelete }) {
   const text = document.createElement("span");
   text.textContent = `${entry.name} → ${entry.item}`;
   li.append(text);
-  if (withDelete && store && entry.ownerId === identity.ownerId) {
+  if (withDelete && store && currentName && entry.name === currentName) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "delete";
@@ -1116,15 +1209,48 @@ function toast(message) {
   toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2500);
 }
 
+// --- Choix du prénom ---
+
+function showPicker() {
+  const buttons = FRIENDS.map((name) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = name;
+    btn.setAttribute("aria-pressed", String(name === currentName));
+    btn.addEventListener("click", () => chooseName(name));
+    return btn;
+  });
+  els.pickerList.replaceChildren(...buttons);
+  els.pickerClose.hidden = !currentName;
+  els.picker.hidden = false;
+  (buttons.find((b) => b.textContent === currentName) ?? buttons[0]).focus();
+}
+
+function hidePicker() {
+  if (!currentName || els.picker.hidden) return;
+  els.picker.hidden = true;
+  els.changeName.focus();
+}
+
+function chooseName(name) {
+  currentName = name;
+  saveName(storage, name);
+  els.picker.hidden = true;
+  render();
+}
+
 // --- Panneau ---
 
 function openSheet(zoneId, trigger) {
+  if (!currentName) {
+    showPicker();
+    return;
+  }
   openZone = zoneId;
   lastTrigger = trigger;
   renderSheet();
   els.sheet.hidden = false;
-  els.nameInput.value = identity.name;
-  (identity.name ? els.itemInput : els.nameInput).focus();
+  els.itemInput.focus();
 }
 
 function closeSheet() {
@@ -1144,9 +1270,8 @@ async function onSubmit(event) {
     return;
   }
   const result = validateEntry(
-    { zone: openZone, item: els.itemInput.value, name: els.nameInput.value },
-    zoneIds,
-    MAX_LEN,
+    { zone: openZone, item: els.itemInput.value, name: currentName },
+    { zoneIds, friends: FRIENDS, maxLen: MAX_LEN },
   );
   if (!result.ok) {
     toast(result.error);
@@ -1154,9 +1279,7 @@ async function onSubmit(event) {
   }
   els.submitBtn.disabled = true;
   try {
-    await store.addItem({ ...result.value, ownerId: identity.ownerId });
-    identity.name = result.value.name;
-    saveName(storage, identity.name);
+    await store.addItem(result.value);
     els.itemInput.value = "";
     toast("Ajouté ! 🎉");
   } catch (err) {
@@ -1192,8 +1315,12 @@ function bindEvents() {
     });
   }
   document.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", closeSheet));
+  els.changeName.addEventListener("click", showPicker);
+  els.pickerClose.addEventListener("click", hidePicker);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeSheet();
+    if (event.key !== "Escape") return;
+    if (!els.picker.hidden) hidePicker();
+    else closeSheet();
   });
   els.form.addEventListener("submit", onSubmit);
 }
@@ -1219,6 +1346,7 @@ async function start() {
   document.title = title;
   bindEvents();
   render();
+  if (!currentName) showPicker();
   try {
     store = await createStore();
   } catch (err) {
@@ -1243,23 +1371,23 @@ start();
 
 - [ ] **Step 2: Vérifier le mode sans config**
 
-Avec le serveur de Task 3 lancé, ouvrir `http://localhost:5173/` (390×844).
-Expected : bandeau « Config Firebase manquante : voir le README. » ; titre « Déguisons Quentin ! 🎉 » ; récapitulatif « Personne n'a encore rien prévu pour Quentin. » ; aucune erreur console (`list_console_messages`). Un clic sur « Torse » ouvre le panneau ; « Ajouter » affiche le toast « Config Firebase manquante… ».
+Avec le serveur de Task 3 lancé, ouvrir `http://localhost:5173/` (390×844) dans un contexte sans `localStorage` existant (`evaluate_script` : `localStorage.clear(); location.reload()`).
+Expected : fenêtre « Qui es-tu ? » avec 15 boutons, dans l'ordre alphabétique, sans bouton ✕ ; Échap ne la ferme pas. Après un clic sur « Simon » : « Salut Simon · ce n'est pas moi » ; bandeau « Config Firebase manquante : voir le README. » ; récapitulatif « Personne n'a encore rien prévu pour Quentin. » ; aucune erreur console (`list_console_messages`). Un clic sur « Torse » ouvre le panneau ; « Ajouter » avec un texte affiche le toast « Config Firebase manquante… ».
 
 - [ ] **Step 3: Vérifier le flux complet en mode démo**
 
 Ouvrir `http://localhost:5173/?demo` (390×844), puis :
-1. Cliquer sur « Tête » → panneau « Tête » avec « Rien de prévu pour l'instant… ».
-2. Prénom `Marc`, accessoire `perruque fluo`, Ajouter → toast « Ajouté ! 🎉 » ; entrée « Marc → perruque fluo » avec « Supprimer » ; la tête devient orange avec un badge « 1 » ; le récapitulatif affiche « Tête ».
-3. Fermer avec Échap, rouvrir « Pieds » → le prénom est pré-rempli et le focus est sur l'accessoire.
+1. Recharger → la fenêtre de choix ne réapparaît pas ; « Salut Simon ».
+2. Cliquer sur « Tête » → panneau « Tête » avec « Rien de prévu pour l'instant… » et focus sur le champ.
+3. Accessoire `perruque fluo`, Ajouter → toast « Ajouté ! 🎉 » ; entrée « Simon → perruque fluo » avec « Supprimer » ; la tête devient orange avec un badge « 1 » ; le récapitulatif affiche « Tête ».
 4. Accessoire `<b>tongs</b>` → s'affiche tel quel en texte, pas en gras.
-5. Prénom effacé et accessoire `   ` → toast « Indique ton prénom. », aucune entrée créée.
-6. Double tap rapide sur Ajouter (via `evaluate_script` : `document.getElementById('submit-btn').click(); document.getElementById('submit-btn').click();` avec un accessoire valide) → une seule nouvelle entrée.
+5. Accessoire `   ` → toast « Indique ce que tu ramènes. », aucune entrée créée.
+6. Double tap rapide sur Ajouter (via `evaluate_script` : remplir `#item-input` avec `chapeau`, puis `document.getElementById('submit-btn').click(); document.getElementById('submit-btn').click();`) → une seule nouvelle entrée.
 7. « Autre » → ajout `pancarte` → le compteur du bouton affiche « 1 ».
-8. Ouvrir un 2ᵉ onglet `?demo` → les entrées y sont. Ajouter une entrée dans l'onglet 2 → elle apparaît dans l'onglet 1 sans rechargement.
-9. Dans l'onglet 1, cliquer sur « Supprimer » d'une entrée → elle disparaît dans les deux onglets.
-10. Vérifier qu'une entrée créée avec un autre `ownerId` n'a pas de bouton Supprimer : `evaluate_script` → `localStorage.setItem('evg-owner-id','autre'); location.reload()`, puis ouvrir « Tête » → aucun bouton « Supprimer ». Remettre ensuite l'ancien id (relevé avant via `localStorage.getItem('evg-owner-id')`).
-11. Pas de scroll horizontal, panneau ouvert compris ; capture d'écran finale.
+8. « ce n'est pas moi » → la fenêtre s'ouvre avec « Simon » en surbrillance et un bouton ✕ ; Échap la ferme sans changer de prénom.
+9. Ouvrir un 2ᵉ onglet `?demo` → les entrées y sont. Dans cet onglet, « ce n'est pas moi » → « Henri », puis ajouter `lunettes` sur « Visage » → l'entrée apparaît dans l'onglet 1 sans rechargement. Dans l'onglet 2, les entrées de Simon n'ont pas de bouton « Supprimer », celles d'Henri en ont un.
+10. Dans l'onglet 2, supprimer l'entrée d'Henri → elle disparaît dans les deux onglets.
+11. Pas de scroll horizontal, fenêtre de choix et panneau ouverts compris ; captures d'écran de la fenêtre de choix, de la page remplie et du panneau.
 
 Expected : chaque point se comporte comme décrit ; aucune erreur console.
 
@@ -1271,7 +1399,7 @@ Si un badge chevauche mal sa zone sur la capture, corriger `badge: { x, y }` dan
 
 ```bash
 git add app.js config.js
-git commit -m "feat: rendu, panneau d'ajout, suppression et temps réel"
+git commit -m "feat: choix du prénom, panneau d'ajout, suppression et temps réel"
 ```
 
 ---
@@ -1285,7 +1413,7 @@ git commit -m "feat: rendu, panneau d'ajout, suppression et temps réel"
 - Modify: `config.js` (`firebaseConfig`, seulement si l'utilisateur fournit sa config)
 
 **Interfaces:**
-- Consumes : schéma de document de Task 2 (`zone`, `item`, `name`, `ownerId`, `createdAt`) ; ids de zone de `config.js`.
+- Consumes : schéma de document de Task 2 (`zone`, `item`, `name`, `createdAt`) ; `ZONES` et `FRIENDS` de `config.js`.
 - Produces : rien.
 
 - [ ] **Step 1: Créer `firestore.rules`**
@@ -1297,18 +1425,14 @@ service cloud.firestore {
     match /items/{itemId} {
       allow read: if true;
 
-      allow create: if request.resource.data.keys().hasOnly(['zone', 'item', 'name', 'ownerId', 'createdAt'])
-        && request.resource.data.keys().hasAll(['zone', 'item', 'name', 'ownerId', 'createdAt'])
+      // La liste des prénoms doit rester identique à FRIENDS dans config.js.
+      allow create: if request.resource.data.keys().hasOnly(['zone', 'item', 'name', 'createdAt'])
+        && request.resource.data.keys().hasAll(['zone', 'item', 'name', 'createdAt'])
         && request.resource.data.zone in ['tete', 'visage', 'cou', 'torse', 'bras', 'mains', 'taille', 'jambes', 'pieds', 'autre']
+        && request.resource.data.name in ['Adrien', 'Antoine', 'Cletch', 'Constantin', 'Eli', 'Fel', 'Gui', 'Henri', 'Jo', 'Nico', 'Pierre', 'Simon', 'Sofiane', 'Thieum', 'Val']
         && request.resource.data.item is string
         && request.resource.data.item.size() >= 1
         && request.resource.data.item.size() <= 60
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 60
-        && request.resource.data.ownerId is string
-        && request.resource.data.ownerId.size() >= 1
-        && request.resource.data.ownerId.size() <= 64
         && request.resource.data.createdAt == request.time;
 
       allow update: if false;
@@ -1337,7 +1461,7 @@ node_modules/
 ````markdown
 # Déguisons Quentin ! 🎉
 
-Petite page pour que chaque ami indique, sur une silhouette, l'habit ou l'accessoire qu'il ramène pour déguiser Quentin à son EVG. La liste est partagée en temps réel.
+Petite page pour que chaque ami choisisse son prénom et indique, sur une silhouette, l'habit ou l'accessoire qu'il ramène pour déguiser Quentin à son EVG. La liste est partagée en temps réel.
 
 ## Essayer sans Firebase
 
@@ -1365,7 +1489,9 @@ Les clés de `firebaseConfig` ne sont pas des secrets : la sécurité repose sur
 
 ## Personnaliser
 
-Le prénom, les zones et la limite de caractères sont dans `config.js`.
+Le prénom du marié, la liste des amis, les zones et la limite de caractères sont dans `config.js`.
+
+⚠️ Si tu modifies la liste des amis (`FRIENDS`), recopie-la aussi dans `firestore.rules`, puis republie les règles dans la console Firebase. Sinon, les nouveaux prénoms ne pourront rien ajouter.
 
 ## Tests
 
@@ -1375,13 +1501,13 @@ npm test
 
 ## Limites connues
 
-Sans compte, n'importe qui ayant le lien peut techniquement supprimer une entrée : le bouton « Supprimer » n'est affiché qu'à son auteur, mais le serveur ne le vérifie pas. C'est suffisant entre amis.
+Il n'y a pas de mot de passe : n'importe qui ayant le lien peut choisir n'importe quel prénom, et techniquement supprimer une entrée. Le bouton « Supprimer » n'est affiché que sur les entrées du prénom choisi, mais le serveur ne le vérifie pas. C'est suffisant entre amis.
 ````
 
 - [ ] **Step 4: Lancer les tests unitaires**
 
 Run: `npm test`
-Expected: PASS — 17 tests, 0 échec.
+Expected: PASS — 18 tests, 0 échec.
 
 - [ ] **Step 5: Commit**
 
@@ -1397,9 +1523,9 @@ Demander à l'utilisateur de créer le projet (README, étapes 1 à 4) et de fou
 Sinon, coller la config dans `config.js`, puis ouvrir `http://localhost:5173/` (sans `?demo`) dans deux onglets :
 1. Le bandeau n'est pas affiché ; aucune erreur console.
 2. Ajout dans l'onglet 1 → l'entrée apparaît dans l'onglet 2.
-3. Ajout de `🎩` répété 60 fois → accepté par le serveur (pas de toast d'erreur). Si les règles le refusent, `size()` ne compte pas comme `textLength` : passer la limite des règles à 240 pour `item` et `name`, et garder la limite de 60 côté client.
+3. Ajout de `🎩` répété 60 fois → accepté par le serveur (pas de toast d'erreur). Si les règles le refusent, `size()` ne compte pas comme `textLength` : passer la limite des règles à 240 pour `item`, et garder la limite de 60 côté client.
 4. Suppression → propagée dans l'autre onglet.
-5. Règle refusant une zone inconnue : `evaluate_script` avec une app Firebase nommée à part (pour ne pas entrer en conflit avec l'app par défaut) :
+5. Les règles refusent une zone inconnue et un prénom hors liste : `evaluate_script` avec une app Firebase nommée à part (pour ne pas entrer en conflit avec l'app par défaut) :
 
 ```js
 async () => {
@@ -1408,21 +1534,23 @@ async () => {
     "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
   );
   const { firebaseConfig } = await import("/config.js");
-  const db = getFirestore(initializeApp(firebaseConfig, "rules-test"));
-  try {
-    await addDoc(collection(db, "items"), {
-      zone: "nez", item: "x", name: "x", ownerId: "x", createdAt: serverTimestamp(),
-    });
-    return "ACCEPTÉ (anormal)";
-  } catch (err) {
-    return err.code;
-  }
+  const items = collection(getFirestore(initializeApp(firebaseConfig, "rules-test")), "items");
+  const attempt = async (data) => {
+    try {
+      await addDoc(items, { ...data, createdAt: serverTimestamp() });
+      return "ACCEPTÉ (anormal)";
+    } catch (err) {
+      return err.code;
+    }
+  };
+  return {
+    zoneInconnue: await attempt({ zone: "nez", item: "x", name: "Simon" }),
+    prenomHorsListe: await attempt({ zone: "tete", item: "x", name: "Marc" }),
+  };
 }
 ```
 
-Expected : `"permission-denied"`.
-
-Expected : chaque point se comporte comme décrit.
+Expected : `{ zoneInconnue: "permission-denied", prenomHorsListe: "permission-denied" }`.
 
 - [ ] **Step 7: Commit (si la config a été ajoutée)**
 
