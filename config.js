@@ -37,10 +37,10 @@ export const ZONES = [
 
 // À remplir avec la config du projet Firebase (voir README).
 export const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyABFf7SSiMSR9ddqk-dvYbkDXlyVxyOlH8",
+  authDomain: "quentin-dressing.firebaseapp.com",
+  projectId: "quentin-dressing",
+  storageBucket: "quentin-dressing.firebasestorage.app",
+  messagingSenderId: "1042486864512",
+  appId: "1:1042486864512:web:27b5f30b319beed5f65465",
 };
