@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /items/{itemId} {
+      allow read: if true;
+
+      // La liste des prénoms doit rester identique à FRIENDS dans config.js.
+      allow create: if request.resource.data.keys().hasOnly(['zone', 'item', 'name', 'createdAt'])
+        && request.resource.data.keys().hasAll(['zone', 'item', 'name', 'createdAt'])
+        && request.resource.data.zone in ['tete', 'visage', 'cou', 'torse', 'bras', 'mains', 'taille', 'jambes', 'pieds', 'autre']
+        && request.resource.data.name in ['Adrien', 'Antoine', 'Cletch', 'Constantin', 'Eli', 'Fel', 'Gui', 'Henri', 'Jo', 'Nico', 'Pierre', 'Simon', 'Sofiane', 'Thieum', 'Val']
+        && request.resource.data.item is string
+        && request.resource.data.item.size() >= 1
+        && request.resource.data.item.size() <= 60
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if false;
+
+      // Sans authentification, le serveur ne peut pas vérifier l'auteur :
+      // la restriction « seulement ses entrées » est faite dans l'interface.
+      allow delete: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
