@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Déguisons Quentin !</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Déguisons Quentin ! 🎉</h1>
+      <p class="intro">Touche une partie du corps pour dire ce que tu ramènes.</p>
+      <p id="whoami" class="whoami" hidden>
+        Salut <strong id="current-name"></strong> ·
+        <button type="button" id="change-name" class="link">ce n'est pas moi</button>
+      </p>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <main>
+      <div class="map">
+        <svg id="body" viewBox="0 0 200 420" role="group" aria-label="Silhouette de Quentin">
+          <g class="zone" data-zone="tete" tabindex="0" role="button" aria-label="Tête">
+            <path d="M68,48 A32,32 0 0 1 132,48 Z" />
+          </g>
+          <g class="zone" data-zone="visage" tabindex="0" role="button" aria-label="Visage">
+            <path d="M68,48 A32,32 0 0 0 132,48 Z" />
+          </g>
+          <g class="zone" data-zone="cou" tabindex="0" role="button" aria-label="Cou">
+            <rect x="88" y="78" width="24" height="18" rx="4" />
+          </g>
+          <g class="zone" data-zone="torse" tabindex="0" role="button" aria-label="Torse">
+            <path d="M60,96 Q100,88 140,96 L134,200 L66,200 Z" />
+          </g>
+          <g class="zone" data-zone="bras" tabindex="0" role="button" aria-label="Bras">
+            <path d="M58,98 L40,104 L24,210 L44,212 L62,132 Z" />
+            <path d="M142,98 L160,104 L176,210 L156,212 L138,132 Z" />
+          </g>
+          <g class="zone" data-zone="mains" tabindex="0" role="button" aria-label="Mains">
+            <circle cx="34" cy="226" r="13" />
+            <circle cx="166" cy="226" r="13" />
+          </g>
+          <g class="zone" data-zone="taille" tabindex="0" role="button" aria-label="Taille">
+            <rect x="66" y="200" width="68" height="28" rx="4" />
+          </g>
+          <g class="zone" data-zone="jambes" tabindex="0" role="button" aria-label="Jambes">
+            <path d="M66,228 L98,228 L96,386 L72,386 Z" />
+            <path d="M102,228 L134,228 L128,386 L104,386 Z" />
+          </g>
+          <g class="zone" data-zone="pieds" tabindex="0" role="button" aria-label="Pieds">
+            <path d="M72,386 L96,386 L96,404 L58,404 Q58,392 72,386 Z" />
+            <path d="M128,386 L104,386 L104,404 L142,404 Q142,392 128,386 Z" />
+          </g>
+          <g id="badges" aria-hidden="true"></g>
+        </svg>
+
+        <button type="button" id="zone-autre" class="zone zone-other" data-zone="autre">
+          🎒 Autre (pancarte, sac…)<span id="other-count" class="count"></span>
+        </button>
+      </div>
+
+      <section class="recap" aria-labelledby="recap-title">
+        <h2 id="recap-title">Qui ramène quoi ?</h2>
+        <div id="recap-list"></div>
+      </section>
+    </main>
+
+    <div id="picker" class="picker" hidden>
+      <div class="picker-panel" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+        <div class="sheet-head">
+          <h2 id="picker-title">Qui es-tu ?</h2>
+          <button type="button" id="picker-close" class="close" aria-label="Fermer" hidden>✕</button>
+        </div>
+        <div id="picker-list" class="picker-list"></div>
+      </div>
+    </div>
+
+    <div id="sheet" class="sheet" hidden>
+      <div class="sheet-backdrop" data-close></div>
+      <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+        <div class="sheet-head">
+          <h2 id="sheet-title"></h2>
+          <button type="button" class="close" data-close aria-label="Fermer">✕</button>
+        </div>
+        <ul id="sheet-list" class="entries"></ul>
+        <form id="add-form" class="add-form" novalidate>
+          <label>
+            Ce que tu ramènes
+            <input id="item-input" name="item" maxlength="60" placeholder="Ex. perruque fluo" autocomplete="off" />
+          </label>
+          <button type="submit" id="submit-btn">Ajouter</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
