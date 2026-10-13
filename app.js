@@ -1,5 +1,5 @@
 import { GROOM_NAME, FRIENDS, ZONES, MAX_LEN, firebaseConfig } from "./config.js";
-import { isConfigured, validateEntry, groupByZone, loadName, saveName } from "./logic.js";
+import { isConfigured, validateEntry, groupByZone, loadName, saveName, startWrite } from "./logic.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const zoneIds = ZONES.map((z) => z.id);
@@ -209,7 +209,7 @@ function closeSheet() {
 
 // --- Actions ---
 
-async function onSubmit(event) {
+function onSubmit(event) {
   event.preventDefault();
   if (els.submitBtn.disabled) return;
   if (!store) {
@@ -224,17 +224,18 @@ async function onSubmit(event) {
     toast(result.error);
     return;
   }
+  // Bref verrou contre le double tap ; on n'attend pas le serveur (réseau lent ou hors ligne).
   els.submitBtn.disabled = true;
-  try {
-    await store.addItem(result.value);
-    els.itemInput.value = "";
-    toast("Ajouté ! 🎉");
-  } catch (err) {
-    console.error(err);
-    toast("Oups, l'ajout a échoué. Réessaie.");
-  } finally {
-    els.submitBtn.disabled = false;
-  }
+  setTimeout(() => (els.submitBtn.disabled = false), 600);
+  startWrite(
+    () => store.addItem(result.value),
+    (err) => {
+      console.error(err);
+      toast("Oups, l'ajout a échoué. Réessaie.");
+    },
+  );
+  els.itemInput.value = "";
+  toast("Ajouté ! 🎉");
 }
 
 async function onDelete(id, btn) {

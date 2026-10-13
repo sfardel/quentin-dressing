@@ -27,6 +27,16 @@ export function groupByZone(items, zoneIds) {
   return groups;
 }
 
+// Lance une écriture sans attendre l'accusé du serveur : hors ligne, Firestore la garde en file
+// et l'affiche déjà via onSnapshot. Seul un échec est signalé.
+export function startWrite(write, onError) {
+  try {
+    Promise.resolve(write()).catch(onError);
+  } catch (err) {
+    onError(err);
+  }
+}
+
 export function loadName(storage, friends) {
   let name = null;
   try {
